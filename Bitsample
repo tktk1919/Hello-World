@@ -1,0 +1,106 @@
+Option Explicit
+
+Const genDigits As Integer = 2 '　世代の桁数
+Const nonceDigits As Integer = 4 '　Nonceの桁数
+Const hashDigits As Integer = 10 'ハッシュ値の桁数
+Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+
+Sub main()
+
+Dim gen As Double '世代
+
+Dim nonce As Integer 'Nonce
+
+Dim previousHash As Double '前のハッシュ値
+
+Dim judgement As Double '正解の数値上限
+judgement = 1 / (10 ^ (nonceDigits - 1))
+' Debug.Print judgement
+
+Dim inputHash As Double 'ブロックのインプットに使うハッシュ　nonce + gen + round(previousHash,6)
+
+Dim staticValue As Double '静的な部分
+
+Randomize
+
+'初期値設定
+previousHash = Rnd()
+' Debug.Print previousHash
+
+gen = 1
+staticValue = gen * 1 / (10 ^ (nonceDigits)) '世代を小数点4桁目に移す　※世代は整数
+staticValue = staticValue + previousHash / (10 ^ (nonceDigits)) '前のハッシュを小数点5桁目に移す　※前のハッシュは小数
+' Debug.Print staticValue
+
+previousHash = findCorrectHash(staticValue, judgement, 3)
+ThisWorkbook.Sheets("Sheet1").Cells(3, 1) = staticValue
+ThisWorkbook.Sheets("Sheet1").Cells(3, 3) = previousHash
+ThisWorkbook.Sheets("Sheet1").Cells(3 + 1, 4) = "=C" & 3 + 1 & "<" & judgement
+Dim i As Integer
+
+For i = 1 To 10 ^ (genDigits)
+gen = gen + 1
+staticValue = gen * 1 / (10 ^ (nonceDigits)) '世代を小数点4桁目に移す　※世代は整数
+staticValue = Round(Rnd(), nonceDigits - 1) + staticValue + previousHash '前のハッシュを小数点5桁目に移す　※前のハッシュは小数
+ThisWorkbook.Sheets("Sheet1").Cells(3 + i, 1) = staticValue
+Debug.Print staticValue
+previousHash = findCorrectHash(staticValue, judgement, 3 + i)
+ThisWorkbook.Sheets("Sheet1").Cells(3 + i, 3) = previousHash
+ThisWorkbook.Sheets("Sheet1").Cells(3 + i + 1, 4) = "=C" & 3 + i + 1 & "<" & judgement
+Next i
+End Sub
+
+Function simpleCrypto(ByVal inputValue As Double) As Double
+'ひとけたずつ桁上げして、各桁に3足す。そのあと最初の桁を最後に持っていく。
+Dim firstDigit As Integer
+Dim i As Integer
+
+simpleCrypto = inputValue * 10
+'Debug.Print simpleCrypto
+
+firstDigit = Fix(simpleCrypto)
+simpleCrypto = simpleCrypto - firstDigit
+'Debug.Print simpleCrypto
+
+simpleCrypto = simpleCrypto + firstDigit / (10 ^ hashDigits)
+'Debug.Print simpleCrypto
+
+For i = 1 To hashDigits
+simpleCrypto = simpleCrypto + 3 / (10 ^ i)
+Next i
+
+firstDigit = Fix(simpleCrypto)
+simpleCrypto = simpleCrypto - firstDigit
+'Debug.Print simpleCrypto
+
+simpleCrypto = simpleCrypto + firstDigit / (10 ^ hashDigits)
+'Debug.Print simpleCrypto
+End Function
+
+Function findCorrectHash(ByVal inputValue As Double, ByVal judgement As Double, ByVal targetRow As Integer) As Double
+Dim i As Integer
+Dim target As Double
+For i = 0 To 10 ^ nonceDigits - 1
+Application.ScreenUpdating = False
+target = i / (10 ^ nonceDigits)
+'Debug.Print target
+target = target + inputValue
+'Debug.Print target
+'Debug.Print target
+If i Mod 10 = 0 Then
+Application.ScreenUpdating = True
+ThisWorkbook.Sheets("Sheet1").Activate
+Sleep (1)
+Application.ScreenUpdating = False
+End If
+findCorrectHash = simpleCrypto(target)
+ThisWorkbook.Sheets("Sheet1").Cells(targetRow, 2) = i '試行回数兼nonce
+ThisWorkbook.Sheets("Sheet1").Cells(targetRow, 3) = findCorrectHash '試行回数兼nonce
+If findCorrectHash < judgement Then
+'Debug.Print target 'inputの値
+' Stop
+Exit For
+End If
+Next i
+
+End Function
